@@ -45,10 +45,10 @@ func init() {
 		cvRegex))
 }
 
-type Constraints [][]constraint
-
 // Constraints is one or more constraint that a npm version can be
 // checked against.
+type Constraints [][]constraint
+
 type constraint struct {
 	version  Version
 	operator operatorFunc
