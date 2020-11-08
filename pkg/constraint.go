@@ -45,9 +45,7 @@ func init() {
 		cvRegex))
 }
 
-type Constraints struct {
-	constraints [][]constraint
-}
+type Constraints [][]constraint
 
 // Constraints is one or more constraint that a npm version can be
 // checked against.
@@ -71,9 +69,7 @@ func NewConstraints(v string) (Constraints, error) {
 		css = append(css, cs)
 	}
 
-	return Constraints{
-		constraints: css,
-	}, nil
+	return css, nil
 
 }
 
@@ -99,7 +95,7 @@ func newConstraint(c string) (constraint, error) {
 	v := semver.New(newPart(major), newPart(minor), newPart(patch), pre, "")
 
 	return constraint{
-		version:  Version{v},
+		version:  v,
 		operator: constraintOperators[m[1]],
 	}, nil
 }
@@ -118,7 +114,7 @@ func (c constraint) check(v Version) bool {
 
 // Check tests if a version satisfies all the constraints.
 func (cs Constraints) Check(v Version) bool {
-	for _, c := range cs.constraints {
+	for _, c := range cs {
 		if andCheck(v, c) {
 			return true
 		}
