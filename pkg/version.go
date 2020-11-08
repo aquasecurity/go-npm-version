@@ -5,9 +5,7 @@ import (
 )
 
 // Version represents a semantic version.
-type Version struct {
-	semver.Version
-}
+type Version = semver.Version
 
 // NewVersion parses a given version and returns an instance of Version
 func NewVersion(s string) (Version, error) {
@@ -15,7 +13,5 @@ func NewVersion(s string) (Version, error) {
 	if err != nil {
 		return Version{}, err
 	}
-	return Version{
-		Version: v,
-	}, nil
+	return v, nil
 }

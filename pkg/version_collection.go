@@ -9,7 +9,7 @@ func (v Collection) Len() int {
 }
 
 func (v Collection) Less(i, j int) bool {
-	return v[i].LessThan(v[j].Version)
+	return v[i].LessThan(v[j])
 }
 
 func (v Collection) Swap(i, j int) {

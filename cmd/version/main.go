@@ -30,7 +30,7 @@ func main() {
 						log.Fatalf("failed to parse npm version (%s): %s", s2, err)
 					}
 
-					fmt.Println(v1.Compare(v2.Version))
+					fmt.Println(v1.Compare(v2))
 					return nil
 				},
 			},

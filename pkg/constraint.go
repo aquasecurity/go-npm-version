@@ -80,10 +80,8 @@ func NewConstraints(v string) (Constraints, error) {
 func newConstraint(c string) (constraint, error) {
 	if c == "" {
 		return constraint{
-			version: Version{
-				Version: semver.New(part.Any(true), part.Any(true), part.Any(true),
-					part.NewParts("*"), ""),
-			},
+			version: semver.New(part.Any(true), part.Any(true), part.Any(true),
+				part.NewParts("*"), ""),
 			operator: constraintOperators[""],
 		}, nil
 	}
@@ -143,35 +141,35 @@ func andCheck(v Version, constraints []constraint) bool {
 //-------------------------------------------------------------------
 
 func constraintEqual(v, c Version) bool {
-	return v.Equal(c.Version)
+	return v.Equal(c)
 }
 
 func constraintGreaterThan(v, c Version) bool {
 	if c.IsPreRelease() && v.IsPreRelease() {
-		return v.Release().Equal(c.Release()) && v.GreaterThan(c.Version)
+		return v.Release().Equal(c.Release()) && v.GreaterThan(c)
 	}
-	return v.GreaterThan(c.Version)
+	return v.GreaterThan(c)
 }
 
 func constraintLessThan(v, c Version) bool {
 	if c.IsPreRelease() && v.IsPreRelease() {
-		return v.Release().Equal(c.Release()) && v.LessThan(c.Version)
+		return v.Release().Equal(c.Release()) && v.LessThan(c)
 	}
-	return v.LessThan(c.Version)
+	return v.LessThan(c)
 }
 
 func constraintGreaterThanEqual(v, c Version) bool {
 	if c.IsPreRelease() && v.IsPreRelease() {
-		return v.Release().Equal(c.Release()) && v.GreaterThanOrEqual(c.Version)
+		return v.Release().Equal(c.Release()) && v.GreaterThanOrEqual(c)
 	}
-	return v.GreaterThanOrEqual(c.Version)
+	return v.GreaterThanOrEqual(c)
 }
 
 func constraintLessThanEqual(v, c Version) bool {
 	if c.IsPreRelease() && v.IsPreRelease() {
-		return v.Release().Equal(c.Release()) && v.LessThanOrEqual(c.Version)
+		return v.Release().Equal(c.Release()) && v.LessThanOrEqual(c)
 	}
-	return v.LessThanOrEqual(c.Version)
+	return v.LessThanOrEqual(c)
 }
 
 func constraintTilde(v, c Version) bool {
@@ -182,9 +180,9 @@ func constraintTilde(v, c Version) bool {
 	// ~1.2.3, ~>1.2.3 --> >=1.2.3, <1.3.0
 	// ~1.2.0, ~>1.2.0 --> >=1.2.0, <1.3.0
 	if c.IsPreRelease() && v.IsPreRelease() {
-		return v.GreaterThanOrEqual(c.Version) && v.LessThan(c.Release())
+		return v.GreaterThanOrEqual(c) && v.LessThan(c.Release())
 	}
-	return v.GreaterThanOrEqual(c.Version) && v.LessThan(c.TildeBump())
+	return v.GreaterThanOrEqual(c) && v.LessThan(c.TildeBump())
 }
 
 func constraintCaret(v, c Version) bool {
@@ -198,9 +196,9 @@ func constraintCaret(v, c Version) bool {
 	// ^0.0    -->  >=0.0.0 <0.1.0
 	// ^0      -->  >=0.0.0 <1.0.0
 	if c.IsPreRelease() && v.IsPreRelease() {
-		return v.GreaterThanOrEqual(c.Version) && v.LessThan(c.Release())
+		return v.GreaterThanOrEqual(c) && v.LessThan(c.Release())
 	}
-	return v.GreaterThanOrEqual(c.Version) && v.LessThan(c.CaretBump())
+	return v.GreaterThanOrEqual(c) && v.LessThan(c.CaretBump())
 }
 
 func preCheck(f operatorFunc) operatorFunc {
