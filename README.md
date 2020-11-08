@@ -55,6 +55,27 @@ for i, raw := range versionsRaw {
 sort.Sort(npm.Collection(versions))
 ```
 
+### CLI
+
+#### Build
+```
+$ go build -o version cmd/version/main.go
+```
+
+#### Compare
+
+```
+$ ./version compare 0.1.2 0.1.3
+-1
+```
+
+#### Constraint
+
+```
+$ ./version satisfy 0.1.2 ">0.1.1"
+true
+```
+
 ## Status
 go-npm-version doesn't support a range of versions yet.
 
