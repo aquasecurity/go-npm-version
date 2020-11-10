@@ -28,7 +28,8 @@ var (
 		"~":  constraintTilde,
 		"^":  constraintCaret,
 	}
-	constraintRegexp *regexp.Regexp
+	constraintRegexp      *regexp.Regexp
+	validConstraintRegexp *regexp.Regexp
 )
 
 type operatorFunc func(v, c Version) bool
@@ -40,7 +41,12 @@ func init() {
 	}
 
 	constraintRegexp = regexp.MustCompile(fmt.Sprintf(
-		`^\s*(%s)\s*(%s)\s*$`,
+		`(%s)\s*(%s)`,
+		strings.Join(ops, "|"),
+		cvRegex))
+
+	validConstraintRegexp = regexp.MustCompile(fmt.Sprintf(
+		`^\s*(\s*(%s)\s*(%s)\s*\,?)*\s*$`,
 		strings.Join(ops, "|"),
 		cvRegex))
 }
@@ -59,8 +65,18 @@ type constraint struct {
 func NewConstraints(v string) (Constraints, error) {
 	var css [][]constraint
 	for _, vv := range strings.Split(v, "||") {
+		// Validate the segment
+		if !validConstraintRegexp.MatchString(vv) {
+			return Constraints{}, xerrors.Errorf("improper constraint: %s", vv)
+		}
+
+		ss := constraintRegexp.FindAllString(vv, -1)
+		if ss == nil {
+			ss = append(ss, strings.TrimSpace(vv))
+		}
+
 		var cs []constraint
-		for _, single := range strings.Split(vv, ",") {
+		for _, single := range ss {
 			c, err := newConstraint(single)
 			if err != nil {
 				return Constraints{}, err
