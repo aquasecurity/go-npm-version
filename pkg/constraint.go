@@ -19,6 +19,7 @@ var (
 	constraintOperators = map[string]operatorFunc{
 		"":   constraintEqual,
 		"=":  constraintEqual,
+		"==": constraintEqual,
 		">":  constraintGreaterThan,
 		"<":  constraintLessThan,
 		">=": constraintGreaterThanEqual,
