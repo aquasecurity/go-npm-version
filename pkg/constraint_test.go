@@ -76,3 +76,74 @@ func TestConstraints_Check(t *testing.T) {
 		})
 	}
 }
+
+func TestConstraints_CheckWithIncludePreRelease(t *testing.T) {
+	tests := []struct {
+		version    string
+		constraint string
+		want       bool
+	}{
+		{"1.4.4-lts.1", ">=1.4.4-lts.1, <2.0.0", true},
+		{"1.4.5-lts.1", ">=1.4.4-lts.1, <2.0.0", true},
+		{"1.4.5", ">=1.4.4-lts.1, <2.0.0", true},
+
+		// Auto-generated tests with pre-release option
+		{"1.2.3-alpha", "<1.2.3-beta", true},
+		{"1.2.2-alpha", "<1.2.3-beta", true},
+		{"1.2.2", "<1.2.3-beta", true},
+		{"0.0.0-alpha", "<0", false},
+		{"0.0.0-alpha", "<0-z", false},
+		{"0.0.0-alpha", "<0.0.0-z", true},
+		{"1.2.3-beta", "<=1.2.3-beta", true},
+		{"1.2.3-alpha", "<=1.2.3-beta", true},
+		{"1.2.2-alpha", "<=1.2.3-beta", true},
+		{"0.0.1-alpha", ">0", false},
+		{"0.0.1-alpha", ">0.0", false},
+		{"0.0.1-alpha", ">0-0", false},
+		{"0.0.1-alpha", ">0.0-0", false},
+		{"0.0.0-alpha", ">0", false},
+		{"0.0.0-alpha", ">0-0", false},
+		{"0.0.0-alpha", ">0.0.0-0", true},
+		{"0.0.0-alpha", ">0.0.0-0", true},
+		{"1.2.3-alpha.2", ">1.2.3-alpha.1", true},
+		{"1.3.3-alpha.2", ">1.2.3-alpha.1", true},
+		{"0.0.1-alpha", ">=0", true},
+		{"0.0.1-alpha", ">=0.0", true},
+		{"0.0.1-alpha", ">=0-0", false},
+		{"0.0.1-alpha", ">=0.0-0", false},
+		{"0.0.0-alpha", ">=0", true},
+		{"0.0.0-alpha", ">=0-0", false},
+		{"0.0.0-alpha", ">=0.0.0-0", true},
+		{"3.4.5-beta.1", ">=0.0.0-0", true},
+		{"1.2.3-alpha.1", ">=1.2.3-alpha.1", true},
+		{"1.2.3-alpha.2", ">=1.2.3-alpha.1", true},
+		{"1.3.3-alpha.2", ">=1.2.3-alpha.1", true},
+		{"1.2.3-alpha.1", "", true},
+		{"0.3.0-alpha", "~0.2", true},
+		{"1.0.0-beta", "~0", true},
+		{"1.0.1", "~0", false},
+		{"1.2.4-beta.2", "~1.2.3-beta.2", true},
+		{"1.3.4-beta.2", "~1.2.3-beta.2", false},
+		{"1.2.1-alpha.1", "^1.2.0", true},
+		{"1.2.1-alpha.1", "^1.2.0-alpha.0", true},
+		{"1.2.1-alpha.0", "^1.2.0-alpha.0", true},
+		{"1.2.0-alpha.1", "^1.2.0-alpha.2", false},
+		{"0.2.3-beta.4", "^0.2.3-beta.2", true},
+		{"0.2.4-beta.2", "^0.2.3-beta.2", true},
+		{"0.3.4-beta.2", "^0.2.3-beta.2", false},
+		{"0.2.3-beta.2", "^0.2.3-beta.2", true},
+	}
+
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%s vs %s", tc.constraint, tc.version), func(t *testing.T) {
+			c, err := NewConstraints(tc.constraint, WithPreRelease(true))
+			require.NoError(t, err)
+
+			v, err := NewVersion(tc.version)
+			require.NoError(t, err)
+
+			got := c.Check(v)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

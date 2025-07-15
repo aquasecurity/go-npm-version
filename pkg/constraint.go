@@ -33,7 +33,7 @@ var (
 	validConstraintRegexp *regexp.Regexp
 )
 
-type operatorFunc func(v, c Version) bool
+type operatorFunc func(v, c Version, conf conf) bool
 
 func init() {
 	ops := make([]string, 0, len(constraintOperators))
@@ -54,7 +54,10 @@ func init() {
 
 // Constraints is one or more constraint that a npm version can be
 // checked against.
-type Constraints [][]constraint
+type Constraints struct {
+	constraints [][]constraint
+	conf        conf
+}
 
 type constraint struct {
 	version  Version
@@ -63,7 +66,13 @@ type constraint struct {
 }
 
 // NewConstraints parses the given string and returns an instance of Constraints
-func NewConstraints(v string) (Constraints, error) {
+func NewConstraints(v string, opts ...ConstraintOption) (Constraints, error) {
+	config := new(conf)
+	// Apply options
+	for _, o := range opts {
+		o.apply(config)
+	}
+
 	var css [][]constraint
 	for _, vv := range strings.Split(v, "||") {
 		// Validate the segment
@@ -87,8 +96,10 @@ func NewConstraints(v string) (Constraints, error) {
 		css = append(css, cs)
 	}
 
-	return css, nil
-
+	return Constraints{
+		constraints: css,
+		conf:        *config,
+	}, nil
 }
 
 func newConstraint(c string) (constraint, error) {
@@ -126,9 +137,9 @@ func newPart(p string) part.Part {
 	return part.NewPart(p)
 }
 
-func (c constraint) check(v Version) bool {
+func (c constraint) check(v Version, conf conf) bool {
 	op := preCheck(c.operator)
-	return op(v, c.version)
+	return op(v, c.version, conf)
 }
 
 func (c constraint) String() string {
@@ -137,8 +148,8 @@ func (c constraint) String() string {
 
 // Check tests if a version satisfies all the constraints.
 func (cs Constraints) Check(v Version) bool {
-	for _, c := range cs {
-		if andCheck(v, c) {
+	for _, c := range cs.constraints {
+		if andCheck(v, c, cs.conf) {
 			return true
 		}
 	}
@@ -149,7 +160,7 @@ func (cs Constraints) Check(v Version) bool {
 // Returns the string format of the constraints
 func (cs Constraints) String() string {
 	var csStr []string
-	for _, orC := range cs {
+	for _, orC := range cs.constraints {
 		var cstr []string
 		for _, andC := range orC {
 			cstr = append(cstr, andC.String())
@@ -160,9 +171,9 @@ func (cs Constraints) String() string {
 	return strings.Join(csStr, "||")
 }
 
-func andCheck(v Version, constraints []constraint) bool {
+func andCheck(v Version, constraints []constraint, conf conf) bool {
 	for _, c := range constraints {
-		if !c.check(v) {
+		if !c.check(v, conf) {
 			return false
 		}
 	}
@@ -173,52 +184,52 @@ func andCheck(v Version, constraints []constraint) bool {
 // Constraint functions
 //-------------------------------------------------------------------
 
-func constraintEqual(v, c Version) bool {
+func constraintEqual(v, c Version, _ conf) bool {
 	return v.Equal(c)
 }
 
-func constraintGreaterThan(v, c Version) bool {
-	if c.IsPreRelease() && v.IsPreRelease() {
+func constraintGreaterThan(v, c Version, conf conf) bool {
+	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
 		return v.Release().Equal(c.Release()) && v.GreaterThan(c)
 	}
 	return v.GreaterThan(c)
 }
 
-func constraintLessThan(v, c Version) bool {
-	if c.IsPreRelease() && v.IsPreRelease() {
+func constraintLessThan(v, c Version, conf conf) bool {
+	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
 		return v.Release().Equal(c.Release()) && v.LessThan(c)
 	}
 	return v.LessThan(c)
 }
 
-func constraintGreaterThanEqual(v, c Version) bool {
-	if c.IsPreRelease() && v.IsPreRelease() {
+func constraintGreaterThanEqual(v, c Version, conf conf) bool {
+	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
 		return v.Release().Equal(c.Release()) && v.GreaterThanOrEqual(c)
 	}
 	return v.GreaterThanOrEqual(c)
 }
 
-func constraintLessThanEqual(v, c Version) bool {
-	if c.IsPreRelease() && v.IsPreRelease() {
+func constraintLessThanEqual(v, c Version, conf conf) bool {
+	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
 		return v.Release().Equal(c.Release()) && v.LessThanOrEqual(c)
 	}
 	return v.LessThanOrEqual(c)
 }
 
-func constraintTilde(v, c Version) bool {
+func constraintTilde(v, c Version, conf conf) bool {
 	// ~*, ~>* --> >= 0.0.0 (any)
 	// ~2, ~2.x, ~2.x.x, ~>2, ~>2.x ~>2.x.x --> >=2.0.0, <3.0.0
 	// ~2.0, ~2.0.x, ~>2.0, ~>2.0.x --> >=2.0.0, <2.1.0
 	// ~1.2, ~1.2.x, ~>1.2, ~>1.2.x --> >=1.2.0, <1.3.0
 	// ~1.2.3, ~>1.2.3 --> >=1.2.3, <1.3.0
 	// ~1.2.0, ~>1.2.0 --> >=1.2.0, <1.3.0
-	if c.IsPreRelease() && v.IsPreRelease() {
+	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
 		return v.GreaterThanOrEqual(c) && v.LessThan(c.Release())
 	}
 	return v.GreaterThanOrEqual(c) && v.LessThan(c.TildeBump())
 }
 
-func constraintCaret(v, c Version) bool {
+func constraintCaret(v, c Version, conf conf) bool {
 	// ^*      -->  (any)
 	// ^1.2.3  -->  >=1.2.3 <2.0.0
 	// ^1.2    -->  >=1.2.0 <2.0.0
@@ -228,19 +239,19 @@ func constraintCaret(v, c Version) bool {
 	// ^0.0.3  -->  >=0.0.3 <0.0.4
 	// ^0.0    -->  >=0.0.0 <0.1.0
 	// ^0      -->  >=0.0.0 <1.0.0
-	if c.IsPreRelease() && v.IsPreRelease() {
+	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
 		return v.GreaterThanOrEqual(c) && v.LessThan(c.Release())
 	}
 	return v.GreaterThanOrEqual(c) && v.LessThan(c.CaretBump())
 }
 
 func preCheck(f operatorFunc) operatorFunc {
-	return func(v, c Version) bool {
-		if v.IsPreRelease() && !c.IsPreRelease() {
+	return func(v, c Version, conf conf) bool {
+		if !conf.includePreRelease && (v.IsPreRelease() && !c.IsPreRelease()) {
 			return false
 		} else if c.IsPreRelease() && c.IsAny() {
 			return false
 		}
-		return f(v, c)
+		return f(v, c, conf)
 	}
 }
