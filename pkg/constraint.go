@@ -120,8 +120,9 @@ func newConstraint(c string) (constraint, error) {
 	minor := strings.TrimPrefix(m[4], ".")
 	patch := strings.TrimPrefix(m[5], ".")
 	pre := part.NewParts(strings.TrimPrefix(m[6], "-"))
+	metadata := strings.TrimPrefix(m[9], "+")
 
-	v := semver.New(newPart(major), newPart(minor), newPart(patch), pre, "")
+	v := semver.New(newPart(major), newPart(minor), newPart(patch), pre, metadata)
 
 	return constraint{
 		version:  v,
@@ -180,40 +181,134 @@ func andCheck(v Version, constraints []constraint, conf conf) bool {
 	return true
 }
 
+// compare compares a version against a constraint version and returns -1, 0 or 1
+// if the version is lower than, equal to or greater than the constraint version.
+//
+// Semantic Versioning ignores build metadata when determining precedence, so
+// versions that differ only in metadata are equal. With the WithBuildMetadata
+// option such versions are ordered by their metadata instead, following
+// node-semver's compareBuild (see the option for details).
+func compare(v, c Version, conf conf) int {
+	result := v.Compare(c)
+	if result != 0 || !conf.includeBuildMetadata || isAny(v) || isAny(c) {
+		return result
+	}
+	return compareMetadata(v.Metadata(), c.Metadata())
+}
+
+// isAny reports whether a version carries a wildcard, i.e. it stands for a set of
+// versions rather than a single one. Such a version compares equal to everything
+// it covers, and build metadata must not break that tie.
+// Version.IsAny only looks at the release, so the pre-release is checked as well.
+func isAny(v Version) bool {
+	return v.IsAny() || v.PreRelease().IsAny()
+}
+
+// sameRelease reports whether two versions share the same release, ignoring both
+// the pre-release and the build metadata. It guards the pre-release branch of the
+// range operators, where only "the same X.Y.Z" is asked: Release() keeps the build
+// metadata, so a metadata-aware equality here would make ">1.2.3-alpha+build.1"
+// reject "1.2.3-alpha+build.2".
+func sameRelease(v, c Version) bool {
+	return v.Release().Equal(c.Release())
+}
+
+func equal(v, c Version, conf conf) bool {
+	return compare(v, c, conf) == 0
+}
+
+func greaterThan(v, c Version, conf conf) bool {
+	return compare(v, c, conf) > 0
+}
+
+func greaterThanOrEqual(v, c Version, conf conf) bool {
+	return compare(v, c, conf) >= 0
+}
+
+func lessThan(v, c Version, conf conf) bool {
+	return compare(v, c, conf) < 0
+}
+
+func lessThanOrEqual(v, c Version, conf conf) bool {
+	return compare(v, c, conf) <= 0
+}
+
+// compareMetadata orders two build metadata labels, treating a version without
+// metadata as the lowest one, the way node-semver's compareBuild does.
+// Semantic Versioning defines no ordering for build metadata, so node-semver
+// reuses the pre-release precedence rules for it, and so does this function:
+// https://github.com/npm/node-semver/blob/v7.8.5/README.md#comparison
+func compareMetadata(v, c string) int {
+	switch {
+	case v == c:
+		return 0
+	case v == "":
+		return -1
+	case c == "":
+		return 1
+	}
+
+	return newMetadataParts(v).Compare(newMetadataParts(c))
+}
+
+// newMetadataParts splits a build metadata label into comparable identifiers,
+// ordered the way node-semver's compareBuild orders them: numeric identifiers
+// are compared numerically and rank lower than alphanumeric ones (its
+// compareIdentifiers helper), and a larger set of identifiers has a higher
+// precedence, e.g. "build" < "build.1".
+// part.NewPart is not used here: it maps "x" and "X" to a wildcard, while in
+// build metadata they are ordinary identifiers.
+//
+// A numeric identifier that doesn't fit in uint64 is kept as a string, so it is
+// compared lexically and ranks above every numeric one. Build numbers that large
+// aren't expected in practice.
+func newMetadataParts(s string) part.Parts {
+	identifiers := strings.Split(s, ".")
+	parts := make(part.Parts, len(identifiers))
+	for i, identifier := range identifiers {
+		if num, err := part.NewUint64(identifier); err == nil {
+			parts[i] = num
+		} else {
+			parts[i] = part.NewString(identifier)
+		}
+	}
+	return parts
+}
+
 //-------------------------------------------------------------------
 // Constraint functions
 //-------------------------------------------------------------------
 
-func constraintEqual(v, c Version, _ conf) bool {
-	return v.Equal(c)
+func constraintEqual(v, c Version, conf conf) bool {
+	return equal(v, c, conf)
 }
 
 func constraintGreaterThan(v, c Version, conf conf) bool {
 	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
-		return v.Release().Equal(c.Release()) && v.GreaterThan(c)
+		return sameRelease(v, c) && greaterThan(v, c, conf)
 	}
-	return v.GreaterThan(c)
+	return greaterThan(v, c, conf)
 }
 
 func constraintLessThan(v, c Version, conf conf) bool {
 	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
-		return v.Release().Equal(c.Release()) && v.LessThan(c)
+		return sameRelease(v, c) && lessThan(v, c, conf)
 	}
-	return v.LessThan(c)
+	return lessThan(v, c, conf)
 }
 
 func constraintGreaterThanEqual(v, c Version, conf conf) bool {
 	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
-		return v.Release().Equal(c.Release()) && v.GreaterThanOrEqual(c)
+		return sameRelease(v, c) && greaterThanOrEqual(v, c, conf)
 	}
-	return v.GreaterThanOrEqual(c)
+	return greaterThanOrEqual(v, c, conf)
 }
 
 func constraintLessThanEqual(v, c Version, conf conf) bool {
 	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
-		return v.Release().Equal(c.Release()) && v.LessThanOrEqual(c)
+		return sameRelease(v, c) && lessThanOrEqual(v, c, conf)
 	}
-	return v.LessThanOrEqual(c)
+	return lessThanOrEqual(v, c, conf)
 }
 
 func constraintTilde(v, c Version, conf conf) bool {
@@ -224,9 +319,9 @@ func constraintTilde(v, c Version, conf conf) bool {
 	// ~1.2.3, ~>1.2.3 --> >=1.2.3, <1.3.0
 	// ~1.2.0, ~>1.2.0 --> >=1.2.0, <1.3.0
 	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
-		return v.GreaterThanOrEqual(c) && v.LessThan(c.Release())
+		return greaterThanOrEqual(v, c, conf) && v.LessThan(c.Release())
 	}
-	return v.GreaterThanOrEqual(c) && v.LessThan(c.TildeBump())
+	return greaterThanOrEqual(v, c, conf) && lessThan(v, c.TildeBump(), conf)
 }
 
 func constraintCaret(v, c Version, conf conf) bool {
@@ -240,9 +335,9 @@ func constraintCaret(v, c Version, conf conf) bool {
 	// ^0.0    -->  >=0.0.0 <0.1.0
 	// ^0      -->  >=0.0.0 <1.0.0
 	if !conf.includePreRelease && (c.IsPreRelease() && v.IsPreRelease()) {
-		return v.GreaterThanOrEqual(c) && v.LessThan(c.Release())
+		return greaterThanOrEqual(v, c, conf) && v.LessThan(c.Release())
 	}
-	return v.GreaterThanOrEqual(c) && v.LessThan(c.CaretBump())
+	return greaterThanOrEqual(v, c, conf) && lessThan(v, c.CaretBump(), conf)
 }
 
 func preCheck(f operatorFunc) operatorFunc {

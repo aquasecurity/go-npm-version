@@ -40,6 +40,30 @@ if c.Check(v) {
 }
 ```
 
+#### Build Metadata
+
+Semantic Versioning requires build metadata to be ignored when determining version precedence and defines no ordering for it, so by default `1.2.3+build.1` and `1.2.3+build.2` satisfy the same constraints.
+npm behaves the same way — node-semver's `compare` and `satisfies` ignore build metadata — but it does define an ordering for it in [`compareBuild`](https://github.com/npm/node-semver/blob/v7.8.5/README.md#comparison), which backs its `sort` and `rsort`.
+`WithBuildMetadata` applies that ordering to constraint checks as well: versions that are otherwise equal are ordered by their build metadata, and a version without metadata is the lowest one.
+Identifiers are compared one by one, numeric identifiers are compared numerically and rank below alphanumeric ones, and a longer set of identifiers ranks higher.
+
+```
+v, _ := npm.NewVersion("1.2.3+build.1")
+c, _ := npm.NewConstraints("< 1.2.3+build.2", npm.WithBuildMetadata(true))
+
+// 1.2.3 < 1.2.3+build < 1.2.3+build.1 < 1.2.3+build.9 < 1.2.3+build.10 < 1.2.3+build.alpha
+if c.Check(v) {
+	fmt.Printf("%s satisfies constraints '%s'", v, c)
+}
+```
+
+The option applies to every comparison, including constraints that carry no metadata: with it enabled `1.2.3+build.1` no longer satisfies `= 1.2.3` or `<= 1.2.3`, and does satisfy `> 1.2.3`.
+Constraints with a wildcard (e.g. `2`, `1.2.x` or `1.2.3-x`) keep ignoring build metadata.
+
+It affects constraint checking only: version comparison always follows Semantic Versioning and ignores build metadata.
+
+Numeric identifiers that don't fit in `uint64` are compared as strings, so their order may differ from the numeric one, e.g. `1.2.3+18446744073709551616` ranks above `1.2.3+100000000000000000000`.
+
 ### Version Sorting
 See [example](./examples/sort/main.go)
 
